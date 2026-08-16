@@ -96,12 +96,31 @@ class ExportConfig:
 
 
 @dataclass(slots=True)
+class DownloadConfig:
+    """YouTube / yt-dlp resilience. Defaults exist so 429s get retried, not raised."""
+
+    cookies_from_browser: str = ""  # firefox | chrome | brave | edge | auto | empty
+    cookiefile: str = ""
+    proxy: str = ""
+    force_ipv4: bool = True
+    sleep_requests: float = 1.5
+    retries: int = 12
+    player_clients: list[str] = field(
+        default_factory=lambda: ["android_vr", "tv", "ios", "web_safari"]
+    )
+    limit_rate: str = "2.5M"
+    concurrent_fragments: int = 1
+    keep_cache: bool = True
+
+
+@dataclass(slots=True)
 class Config:
     models: ModelsConfig = field(default_factory=ModelsConfig)
     whisper: WhisperConfig = field(default_factory=WhisperConfig)
     watcher: WatcherConfig = field(default_factory=WatcherConfig)
     notes: NotesConfig = field(default_factory=NotesConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
+    download: DownloadConfig = field(default_factory=DownloadConfig)
     cache_dir: str = ""
     keep_media: bool = False
     ollama_host: str = ""
@@ -134,6 +153,7 @@ class Config:
             "watcher": asdict(self.watcher),
             "notes": asdict(self.notes),
             "export": asdict(self.export),
+            "download": asdict(self.download),
             "cache_dir": self.cache_dir,
             "keep_media": self.keep_media,
             "ollama_host": self.ollama_host,
@@ -160,6 +180,8 @@ class Config:
             cfg.notes = _fill(NotesConfig, data["notes"])
         if "export" in data and isinstance(data["export"], dict):
             cfg.export = _fill(ExportConfig, data["export"])
+        if "download" in data and isinstance(data["download"], dict):
+            cfg.download = _fill(DownloadConfig, data["download"])
         if "cache_dir" in data and data["cache_dir"] is not None:
             cfg.cache_dir = str(data["cache_dir"])
         if "keep_media" in data and data["keep_media"] is not None:

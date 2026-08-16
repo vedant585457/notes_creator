@@ -32,6 +32,20 @@ formats = ["md", "html"]
 embed_frames = true
 max_embedded_frames = 16
 
+[download]
+# Leave cookies empty for a guest session. If YouTube 429s you, sign into
+# YouTube in Firefox (or Chrome) and set one of these:
+cookies_from_browser = ""          # firefox | chrome | brave | edge | auto
+cookiefile = ""                    # Netscape cookies.txt
+proxy = ""
+force_ipv4 = true
+sleep_requests = 1.5
+retries = 12
+player_clients = ["android_vr", "tv", "ios", "web_safari"]
+limit_rate = "2.5M"
+concurrent_fragments = 1
+keep_cache = true
+
 cache_dir = ""
 keep_media = false
 ollama_host = ""

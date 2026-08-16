@@ -30,6 +30,7 @@ from watchlisten.models import DepStatus, ExportFormat, PipelineResult, Stage, S
 from watchlisten.pipeline import Pipeline, PipelineCancelled, PipelineHooks
 from watchlisten.ui.widgets import BrandBar, DepBadges, MetaBox, StageList
 from watchlisten.utils import (
+    CancelledError,
     URLValidationError,
     WatchListenError,
     extract_video_id,
@@ -450,6 +451,15 @@ class SettingsScreen(ModalScreen[None]):
                     yield Input(str(cfg.notes.chunk_minutes), id="set-chunk", classes="setting")
                     yield Label("Notes language (or auto)", classes="label-muted")
                     yield Input(cfg.notes.language, id="set-lang", classes="setting")
+                    yield Label("Cookies from browser (firefox/chrome/auto)", classes="label-muted")
+                    yield Input(
+                        cfg.download.cookies_from_browser,
+                        id="set-cookies-browser",
+                        classes="setting",
+                        placeholder="leave empty unless YouTube rate-limits you",
+                    )
+                    yield Label("Cookie file (cookies.txt)", classes="label-muted")
+                    yield Input(cfg.download.cookiefile, id="set-cookiefile", classes="setting")
                 with Vertical():
                     yield Label("Ollama host", classes="label-muted")
                     yield Input(cfg.resolved_ollama_host(), id="set-host", classes="setting")
@@ -477,6 +487,10 @@ class SettingsScreen(ModalScreen[None]):
         cfg.keep_media = self.query_one("#set-keep", Checkbox).value
         cfg.export.embed_frames = self.query_one("#set-embed", Checkbox).value
         cfg.notes.language = self.query_one("#set-lang", Input).value.strip() or "auto"
+        cfg.download.cookies_from_browser = self.query_one(
+            "#set-cookies-browser", Input
+        ).value.strip()
+        cfg.download.cookiefile = self.query_one("#set-cookiefile", Input).value.strip()
         try:
             cfg.watcher.max_frames = max(1, int(self.query_one("#set-frames", Input).value))
         except ValueError:

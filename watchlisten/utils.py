@@ -30,6 +30,10 @@ class WatchListenError(Exception):
     """Base error for user-facing failures."""
 
 
+class CancelledError(WatchListenError):
+    """User asked to stop a running pipeline."""
+
+
 class URLValidationError(WatchListenError):
     pass
 

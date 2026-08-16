@@ -15,7 +15,7 @@ from watchlisten import __app_name__, __version__
 from watchlisten.config import Config
 from watchlisten.models import ExportFormat, Stage, StageStatus
 from watchlisten.pipeline import Pipeline, PipelineCancelled, PipelineHooks
-from watchlisten.utils import WatchListenError, probe_dependencies
+from watchlisten.utils import CancelledError, WatchListenError, probe_dependencies
 
 console = Console(stderr=False)
 
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return _cmd_run(config, url, args)
-    except PipelineCancelled:
+    except (PipelineCancelled, CancelledError):
         console.print("[yellow]Cancelled.[/]")
         return 130
     except WatchListenError as exc:
@@ -78,6 +78,19 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--captions-only", action="store_true", help="Use YouTube captions instead of Whisper")
     parser.add_argument("--max-frames", type=int, default=None)
     parser.add_argument("--keep-media", action="store_true")
+    parser.add_argument(
+        "--cookies-from-browser",
+        dest="cookies_from_browser",
+        default=None,
+        help="firefox, chrome, brave, edge, chromium, or auto — used if YouTube rate-limits the guest session",
+    )
+    parser.add_argument(
+        "--cookies",
+        dest="cookiefile",
+        default=None,
+        help="Netscape cookies.txt exported from a logged-in YouTube tab",
+    )
+    parser.add_argument("--proxy", dest="proxy", default=None, help="HTTP/SOCKS proxy for yt-dlp")
     parser.add_argument("--tui", action="store_true", help="Force the terminal UI")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
     parser.add_argument("--check", action="store_true", help="Probe local dependencies and exit")
@@ -102,6 +115,12 @@ def _apply_cli_overrides(config: Config, args: argparse.Namespace) -> None:
         config.watcher.max_frames = args.max_frames
     if args.keep_media:
         config.keep_media = True
+    if args.cookies_from_browser:
+        config.download.cookies_from_browser = args.cookies_from_browser
+    if args.cookiefile:
+        config.download.cookiefile = args.cookiefile
+    if args.proxy:
+        config.download.proxy = args.proxy
 
 
 def _cmd_check(config: Config) -> int:

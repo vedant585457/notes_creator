@@ -12,11 +12,14 @@ def test_parser_accepts_common_flags():
             "--skip-vision",
             "--captions-only",
             "--cli",
+            "--cookies-from-browser",
+            "firefox",
         ]
     )
     assert args.skip_vision is True
     assert args.cli is True
     assert args.formats == "md,html"
+    assert args.cookies_from_browser == "firefox"
 
 
 def test_version_exits_zero():

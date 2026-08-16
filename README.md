@@ -96,6 +96,7 @@ watchlisten "https://www.youtube.com/watch?v=…" -f md,html,pdf -o ./notes
 watchlisten URL --skip-vision --captions-only     # fast, audio/captions only
 watchlisten URL --agentic                         # model may re-watch / re-listen
 watchlisten URL --vision-model llava --text-model qwen2.5 --whisper-model small
+watchlisten URL --cookies-from-browser firefox    # if YouTube 429s the guest session
 watchlisten --check                               # probe ffmpeg / ollama / whisper
 ```
 
@@ -121,7 +122,7 @@ Canonical form is Markdown. HTML is a styled Jinja template; PDF is that HTML th
 | --- | --- | --- |
 | Validate | `utils.py` | Accepts `youtube.com/watch`, `youtu.be`, Shorts, Live, Embed, or a raw 11-char id. |
 | Metadata | `core/downloader.py` | Title, duration, chapters, description, caption languages via yt-dlp. |
-| Download | `core/downloader.py` | Best ≤1080p + 16 kHz mono WAV. Private / age-gated / region-locked errors are translated, not dumped as stack traces. |
+| Download | `core/downloader.py` | 720p (then 480p / audio) + 16 kHz WAV. 429s are retried with backoff and a player-client ladder instead of failing the run. |
 | Listen | `core/listener.py` | `faster-whisper` with VAD. CUDA/`float16` when available, otherwise CPU/`int8`. YouTube captions are a fallback (or a fast path with `--captions-only`). |
 | Watch | `core/watcher.py` | PySceneDetect on cuts; interval sampling if there are no cuts. Hard cap on frames (`max_frames`, default 36). Each frame: Ollama vision + optional Tesseract. |
 | Timeline | `core/timeline.py` | Frames attach to overlapping speech; silent slides become their own entries. |
@@ -180,8 +181,26 @@ tests/                          no network, no Ollama required
 - **Existing captions** — used as fallback or as the primary listen pass.
 - **No GPU** — Whisper `int8` on CPU; fewer frames via `max_frames`.
 - **Private / age-restricted / region-locked** — clean `MediaError`, not a yt-dlp traceback.
+- **YouTube rate limit (HTTP 429 / "not a bot" / "try again later")** — see below.
 - **Slow vision** — only scene-change frames, then an even subsample down to `max_frames`.
 - **Missing extras** — no Whisper? captions. no Tesseract? skip OCR. no WeasyPrint? Markdown/HTML still work.
+
+## YouTube rate limits
+
+YouTube throttles anonymous download IPs. WatchListen does **not** die on the first 429. It follows current [yt-dlp guidance](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube):
+
+1. Talk to **one** player client at a time, starting with `android_vr` (no PO token).
+2. Sleep `1.5s` between Innertube requests; cap fragment concurrency at 1; force IPv4.
+3. On 429 / 403 / "try again later": wait 8–60s, then switch strategy (`tv` → `ios` → progressive → audio-only).
+4. Resume partial files and **reuse the media cache** so a retry does not re-hit YouTube.
+5. If the video is still blocked but captions exist, notes continue from captions (watch is skipped).
+6. Optional last resort: `--cookies-from-browser firefox` after you sign into YouTube in that browser. Use a throwaway account if you download a lot — cookies can get a Google account flagged.
+
+```bash
+watchlisten URL --cookies-from-browser firefox
+# or
+export WATCHLISTEN_COOKIES_FROM_BROWSER=firefox
+```
 
 ## Development
 

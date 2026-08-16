@@ -24,6 +24,7 @@ from watchlisten.models import (
     VideoMetadata,
 )
 from watchlisten.utils import (
+    CancelledError,
     WatchListenError,
     extract_video_id,
     normalize_youtube_url,
@@ -68,7 +69,10 @@ class Pipeline:
         self._stage(Stage.VALIDATE, StageStatus.DONE, video_id)
 
         downloader = Downloader(
-            self.config, on_progress=self.hooks.on_progress, on_log=self.hooks.on_log
+            self.config,
+            on_progress=self.hooks.on_progress,
+            on_log=self.hooks.on_log,
+            is_cancelled=self.hooks.is_cancelled,
         )
         self._stage(Stage.METADATA, StageStatus.RUNNING)
         metadata = downloader.fetch_metadata(url)
@@ -78,8 +82,6 @@ class Pipeline:
         self._stage(Stage.METADATA, StageStatus.DONE, metadata.title)
 
         workdir = self.config.cache_path / "work" / video_id
-        if workdir.exists():
-            shutil.rmtree(workdir, ignore_errors=True)
         workdir.mkdir(parents=True, exist_ok=True)
 
         self._check_cancel()
@@ -151,8 +153,7 @@ class Pipeline:
         shutil.copy2(script_path, dest / "timeline.md")
         self._stage(Stage.EXPORT, StageStatus.DONE, str(dest))
 
-        if not self.config.keep_media:
-            # Keep frames that were copied; drop bulky video/audio from cache
+        if not self.config.keep_media and not self.config.download.keep_cache:
             for bulky in (media.video_path, media.audio_path):
                 if bulky and bulky.exists():
                     try:
@@ -173,7 +174,10 @@ class Pipeline:
 
     def fetch_metadata(self, url: str) -> VideoMetadata:
         downloader = Downloader(
-            self.config, on_progress=self.hooks.on_progress, on_log=self.hooks.on_log
+            self.config,
+            on_progress=self.hooks.on_progress,
+            on_log=self.hooks.on_log,
+            is_cancelled=self.hooks.is_cancelled,
         )
         return downloader.fetch_metadata(url)
 
