@@ -1,0 +1,37 @@
+# Copy to ./watchlisten.toml or ~/.config/watchlisten/config.toml
+
+[models]
+vision = "llama3.2-vision"
+text = "llama3.1"
+whisper = "base"
+
+[whisper]
+device = "auto"          # auto | cpu | cuda
+compute_type = "auto"    # auto | int8 | float16 | float32
+language = "auto"
+vad_filter = true
+prefer_captions = false
+
+[watcher]
+max_frames = 36
+min_scene_len = 8.0
+interval_fallback = 12.0
+scene_threshold = 27.0
+enable_ocr = true
+
+[notes]
+language = "auto"
+chunk_minutes = 8.0
+temperature = 0.3
+agentic = false
+max_tool_rounds = 8
+
+[export]
+output_dir = "./notes"
+formats = ["md", "html"]
+embed_frames = true
+max_embedded_frames = 16
+
+cache_dir = ""
+keep_media = false
+ollama_host = ""

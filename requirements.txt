@@ -1,0 +1,23 @@
+# Core
+yt-dlp>=2024.8.6
+ollama>=0.3.3
+opencv-python-headless>=4.9.0
+scenedetect>=0.6.4
+textual>=0.82.0
+rich>=13.7.0
+markdown>=3.6
+jinja2>=3.1.4
+tomli-w>=1.0.0
+pillow>=10.3.0
+
+# Listening (local ASR)
+faster-whisper>=1.0.3
+
+# OCR fallback for on-screen text
+pytesseract>=0.3.13
+
+# PDF export (needs system cairo/pango)
+weasyprint>=62.3
+
+# Dev
+pytest>=8.2.0

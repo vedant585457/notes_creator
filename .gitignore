@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Tool output & caches
+notes/
+output/
+.cache/
+*.wav
+*.mp3
+*.mp4
+*.mkv
+*.webm
+*.m4a
+work/
+tmp/
+temp/
+
+# Local config overrides
+watchlisten.toml
+.env
+.env.local
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/

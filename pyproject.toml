@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "watchlisten"
+version = "0.1.0"
+description = "Local, privacy-first YouTube notes: watch and listen with Ollama, export MD/HTML/PDF."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "WatchListen" }]
+keywords = ["youtube", "notes", "ollama", "whisper", "tui", "privacy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "yt-dlp>=2024.8.6",
+    "ollama>=0.3.3",
+    "opencv-python-headless>=4.9.0",
+    "scenedetect>=0.6.4",
+    "textual>=0.82.0",
+    "rich>=13.7.0",
+    "markdown>=3.6",
+    "jinja2>=3.1.4",
+    "tomli-w>=1.0.0",
+    "pillow>=10.3.0",
+]
+
+[project.optional-dependencies]
+whisper = ["faster-whisper>=1.0.3"]
+ocr = ["pytesseract>=0.3.13"]
+pdf = ["weasyprint>=62.3"]
+all = [
+    "faster-whisper>=1.0.3",
+    "pytesseract>=0.3.13",
+    "weasyprint>=62.3",
+]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+watchlisten = "watchlisten.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/vedant585457/notes_creator"
+
+[tool.setuptools.packages.find]
+include = ["watchlisten*"]
+
+[tool.setuptools.package-data]
+watchlisten = ["ui/*.tcss", "templates/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

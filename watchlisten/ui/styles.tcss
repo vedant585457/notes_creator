@@ -1,0 +1,354 @@
+/* WatchListen — cinema dark: charcoal, amber spotlight, teal audio. */
+
+$bg: #0c0f14;
+$surface: #141a22;
+$raised: #1c2430;
+$ink: #e8edf2;
+$muted: #8b949e;
+$amber: #f5a524;
+$amber-dim: #8a5a12;
+$teal: #2dd4bf;
+$teal-dim: #134e4a;
+$rose: #fb7185;
+$line: #2a3340;
+
+Screen {
+    background: $bg;
+    color: $ink;
+}
+
+Footer {
+    background: #0a0c10;
+    color: $muted;
+}
+
+/* ---------- brand bar ---------- */
+
+BrandBar {
+    dock: top;
+    height: 5;
+    padding: 1 2;
+    background: $surface;
+    border-bottom: wide $line;
+}
+
+#brand-mark {
+    color: $amber;
+    text-style: bold;
+    text-align: left;
+}
+
+#brand-sub {
+    color: $muted;
+    text-align: left;
+}
+
+#brand-privacy {
+    color: $teal;
+    text-align: right;
+    dock: right;
+    width: 28;
+}
+
+/* ---------- home ---------- */
+
+HomeScreen {
+    layout: vertical;
+}
+
+#home-body {
+    width: 100%;
+    height: 1fr;
+    align: center middle;
+}
+
+#home-card {
+    width: 96;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    background: $surface;
+    border: tall $line;
+    padding: 1 2 1 2;
+}
+
+#url-label {
+    color: $muted;
+    margin-top: 1;
+}
+
+#url-input {
+    width: 100%;
+    margin-top: 0;
+    background: $raised;
+    border: tall $line;
+}
+
+#url-input:focus {
+    border: tall $amber;
+}
+
+#url-hint {
+    color: $muted;
+    height: 1;
+}
+
+#url-hint.ok { color: $teal; }
+#url-hint.bad { color: $rose; }
+
+#meta-box {
+    margin-top: 1;
+    padding: 1 1;
+    background: $raised;
+    border: tall $amber-dim;
+    height: auto;
+    display: none;
+}
+
+#meta-box.visible {
+    display: block;
+}
+
+#meta-title {
+    text-style: bold;
+    color: $ink;
+}
+
+#meta-sub {
+    color: $muted;
+}
+
+#options-row {
+    layout: horizontal;
+    height: auto;
+    margin-top: 1;
+}
+
+#formats-col, #models-col {
+    width: 1fr;
+    height: auto;
+    padding: 0 1 0 0;
+}
+
+.group-title {
+    color: $amber;
+    text-style: bold;
+    margin-bottom: 0;
+}
+
+Checkbox {
+    background: transparent;
+    padding: 0 1;
+}
+
+Select {
+    width: 100%;
+    margin: 0 0 1 0;
+}
+
+#go-row {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+    padding: 1 0;
+}
+
+#go-btn {
+    background: $amber;
+    color: #1c1306;
+    text-style: bold;
+    min-width: 36;
+    border: none;
+}
+
+#go-btn:hover {
+    background: #ffc857;
+}
+
+#go-btn:disabled {
+    background: $line;
+    color: $muted;
+}
+
+#dep-row {
+    height: auto;
+    color: $muted;
+    text-align: center;
+    margin-top: 0;
+}
+
+DepBadges {
+    height: auto;
+    text-align: center;
+    color: $muted;
+}
+
+/* ---------- progress ---------- */
+
+ProgressScreen {
+    layout: vertical;
+}
+
+#progress-split {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#stage-panel {
+    width: 42;
+    height: 1fr;
+    background: $surface;
+    border-right: tall $line;
+    padding: 1 2;
+}
+
+#stage-heading {
+    color: $amber;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+StageList {
+    height: auto;
+}
+
+#live-panel {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+    padding: 1 2;
+}
+
+#now-playing {
+    height: auto;
+    color: $teal;
+    margin-bottom: 1;
+}
+
+#bar {
+    margin-bottom: 1;
+}
+
+#log {
+    height: 1fr;
+    border: tall $line;
+    background: $raised;
+    scrollbar-background: $surface;
+    scrollbar-color: $amber-dim;
+}
+
+#progress-actions {
+    dock: bottom;
+    height: 3;
+    align: left middle;
+    padding: 0 2;
+    background: $surface;
+    border-top: tall $line;
+}
+
+#cancel-btn {
+    background: $rose;
+    color: #1c0a0d;
+    border: none;
+}
+
+/* ---------- preview ---------- */
+
+PreviewScreen {
+    layout: vertical;
+}
+
+#preview-head {
+    height: auto;
+    padding: 1 2 0 2;
+    background: $surface;
+}
+
+#preview-title {
+    text-style: bold;
+    color: $ink;
+}
+
+#preview-paths {
+    color: $muted;
+}
+
+TabbedContent {
+    height: 1fr;
+    padding: 0 1;
+}
+
+TabPane {
+    padding: 1;
+}
+
+.md-pane {
+    height: 1fr;
+    background: $raised;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#preview-actions {
+    dock: bottom;
+    height: 3;
+    padding: 0 2;
+    align: left middle;
+    background: $surface;
+    border-top: tall $line;
+}
+
+Button.secondary {
+    background: $raised;
+    color: $ink;
+    border: tall $line;
+    margin-right: 1;
+}
+
+Button.secondary:hover {
+    border: tall $amber;
+}
+
+/* ---------- settings / help ---------- */
+
+#modal-card {
+    width: 78;
+    max-width: 100%;
+    height: auto;
+    max-height: 90%;
+    background: $surface;
+    border: tall $amber-dim;
+    padding: 1 2 1 2;
+}
+
+#modal-title {
+    text-style: bold;
+    color: $amber;
+    margin-bottom: 1;
+}
+
+.help-body {
+    color: $ink;
+    height: auto;
+}
+
+Input.setting {
+    background: $raised;
+    border: tall $line;
+    margin-bottom: 1;
+}
+
+#settings-grid {
+    layout: horizontal;
+    height: auto;
+}
+
+#settings-grid > Vertical {
+    width: 1fr;
+    height: auto;
+    padding-right: 1;
+}
+
+.label-muted {
+    color: $muted;
+}

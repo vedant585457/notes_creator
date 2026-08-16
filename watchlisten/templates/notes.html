@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ raw_title }} — WatchListen Notes</title>
+  <style>
+    :root {
+      --bg: #f6f1e7;
+      --paper: #fffaf1;
+      --ink: #1c1915;
+      --muted: #6b6258;
+      --line: #e4d8c4;
+      --amber: #c47b17;
+      --teal: #0f766e;
+      --quote: #f3e6cf;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+      line-height: 1.55;
+      font-size: 16px;
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 36px 28px 80px;
+    }
+    header.mast {
+      border-bottom: 3px solid var(--ink);
+      padding-bottom: 18px;
+      margin-bottom: 28px;
+    }
+    .brand {
+      font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.18em;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--amber);
+      font-weight: 700;
+      margin: 0 0 10px;
+    }
+    header.mast h1 {
+      font-size: 32px;
+      line-height: 1.2;
+      margin: 0 0 10px;
+    }
+    .meta {
+      font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .meta a { color: var(--teal); text-decoration: none; }
+    article h1 { font-size: 28px; margin-top: 1.4em; }
+    article h2 {
+      font-size: 20px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 4px;
+      margin-top: 1.6em;
+    }
+    article h3 { font-size: 17px; margin-top: 1.2em; }
+    article p { margin: 0.7em 0; }
+    article ul, article ol { padding-left: 1.3em; }
+    article li { margin: 0.25em 0; }
+    article blockquote {
+      margin: 1em 0;
+      padding: 10px 16px;
+      background: var(--quote);
+      border-left: 4px solid var(--amber);
+    }
+    article code {
+      font-family: "IBM Plex Mono", "Source Code Pro", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: #efe6d6;
+      padding: 0.1em 0.35em;
+    }
+    article pre {
+      background: #221e18;
+      color: #f6f1e7;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    article pre code { background: transparent; color: inherit; padding: 0; }
+    article table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 14px;
+      margin: 1em 0;
+    }
+    article th, article td {
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    article th { background: #efe4d0; }
+    .stills {
+      margin-top: 42px;
+      padding-top: 12px;
+      border-top: 3px solid var(--ink);
+    }
+    .stills h2 { margin-top: 0.4em; }
+    .still {
+      margin: 18px 0 28px;
+      page-break-inside: avoid;
+    }
+    .still img {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      background: #111;
+    }
+    .still .cap {
+      font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    footer.colophon {
+      margin-top: 48px;
+      font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    @page {
+      size: A4;
+      margin: 18mm 16mm 20mm;
+      @bottom-center {
+        content: counter(page);
+        font-family: "Avenir Next", Helvetica, Arial, sans-serif;
+        font-size: 10px;
+        color: #6b6258;
+      }
+    }
+    @media print {
+      body { background: white; }
+      .wrap { padding: 0; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="mast">
+      <p class="brand">WatchListen · local notes</p>
+      <h1>{{ raw_title }}</h1>
+      <p class="meta">
+        {% if channel %}{{ channel }} · {% endif %}
+        {% if url %}<a href="{{ url }}">{{ url }}</a>{% endif %}
+      </p>
+    </header>
+    <article>
+      {{ body | safe }}
+    </article>
+    {% if frames %}
+    <section class="stills">
+      <h2>Key frames</h2>
+      {% for frame in frames %}
+      <figure class="still">
+        <img src="{{ frame.src }}" alt="{{ frame.alt }}" />
+        <figcaption class="cap">[{{ frame.timestamp }}] {{ frame.alt }}</figcaption>
+      </figure>
+      {% endfor %}
+    </section>
+    {% endif %}
+    <footer class="colophon">Generated locally by {{ generated_by }} · nothing left the machine</footer>
+  </div>
+</body>
+</html>
