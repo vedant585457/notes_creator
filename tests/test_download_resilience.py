@@ -8,7 +8,7 @@ from watchlisten.config import Config
 from watchlisten.core.downloader import Downloader
 from watchlisten.core.yt_resilience import (
     FORMAT_AUDIO,
-    FORMAT_VIDEO_720,
+    FORMAT_ANY,
     backoff_seconds,
     build_attempt_plan,
     is_drm_report,
@@ -71,16 +71,13 @@ def test_parse_cookies_from_browser():
     assert parse_cookies_from_browser("") is None
 
 
-def test_attempt_plan_uses_one_client_at_a_time():
+def test_attempt_plan_starts_with_ytdlp_defaults():
     plan = build_attempt_plan(cookies_configured=False)
-    assert plan[0].client == "web_safari"
-    assert plan[0].format_spec == FORMAT_VIDEO_720
+    assert plan[0].client == ""
+    assert plan[0].format_spec == FORMAT_ANY
     assert plan[0].use_cookies is False
-    assert {plan[0].client, plan[1].client} == {"web_safari"}
     assert any(a.format_spec == FORMAT_AUDIO for a in plan)
-    assert any("hls" in a.label for a in plan)
     assert all(not a.use_cookies for a in plan)
-    # Broken/legacy clients come later, not first
     assert plan[0].client not in {"android_vr", "tv"}
 
 
@@ -88,7 +85,7 @@ def test_attempt_plan_inserts_cookie_retry_when_configured():
     plan = build_attempt_plan(cookies_configured=True)
     cookie_attempts = [a for a in plan if a.use_cookies]
     assert cookie_attempts
-    assert cookie_attempts[0].client == "web_safari"
+    assert cookie_attempts[0].client == ""
 
 
 class _ScriptedYDL:
@@ -159,7 +156,9 @@ def test_download_retries_after_429_then_succeeds(tmp_path: Path):
     assert bundle.video_path is not None
     assert bundle.video_path.exists()
     assert sleeps  # waited before the second strategy
-    assert fake.opts_log[0]["extractor_args"]["youtube"]["player_client"] == ["web_safari"]
+    assert "extractor_args" not in fake.opts_log[0]
+    assert "format" not in fake.opts_log[0]
+    assert fake.opts_log[0]["remote_components"] == ["ejs:github", "ejs:npm"]
     assert fake.opts_log[0]["source_address"] == "0.0.0.0"
     assert fake.opts_log[0]["concurrent_fragment_downloads"] == 1
 
@@ -204,7 +203,7 @@ def test_metadata_ignores_missing_formats_and_does_not_say_unavailable(tmp_path:
         "https://www.youtube.com/watch?v=1RFx_5p3DYY",
     )
     assert "unavailable" not in str(err).lower()
-    assert "format" in str(err).lower()
+    assert "stream" in str(err).lower() or "format" in str(err).lower()
 
     dl, _sleeps, fake = _downloader(
         tmp_path,

@@ -16,6 +16,7 @@ from watchlisten.core.yt_resilience import (
     build_metadata_plan,
     detect_browsers,
     detect_js_runtime,
+    ejs_installed,
     is_drm_report,
     is_rate_limited,
     is_recoverable,
@@ -101,17 +102,26 @@ class Downloader:
         if reused is not None:
             return reused
 
+        from watchlisten.core.yt_resilience import ejs_installed
+
         runtimes = detect_js_runtime()
         if runtimes:
             self.on_log("JS runtime for YouTube formats: " + ", ".join(runtimes))
         else:
             self.on_log(
-                "No JS runtime (deno/node) on PATH — some YouTube clients will "
-                "only offer SABR/DRM-looking formats. Install deno or nodejs."
+                "No JS runtime (deno, or node>=20) on PATH. YouTube will hide "
+                "most formats. Install deno: https://deno.land"
+            )
+        if ejs_installed():
+            self.on_log("yt-dlp-ejs challenge solver is installed.")
+        else:
+            self.on_log(
+                "yt-dlp-ejs missing — fetching solver via ejs:github. "
+                "For a permanent install: pip install -U 'yt-dlp[default]'"
             )
 
         plan = build_attempt_plan(
-            cookies_configured=self._cookies_ready(),
+            cookies_configured=self._cookies_ready() or bool(detect_browsers()),
             clients=list(self.config.download.player_clients),
         )
         last_error: Exception | None = None
@@ -229,6 +239,8 @@ class Downloader:
         runtimes = detect_js_runtime()
         if runtimes:
             opts["js_runtimes"] = runtimes
+        # Allow yt-dlp to fetch the EJS challenge solver if the wheel is missing.
+        opts["remote_components"] = ["ejs:github", "ejs:npm"]
         if attempt.format_spec and not skip_download:
             opts["format"] = attempt.format_spec
         if not skip_download:
@@ -714,28 +726,20 @@ def _translate_ytdlp_error(exc: Exception, url: str, *, exhausted: bool = False)
             "This video is age-restricted. Sign into YouTube in a browser and set "
             "download.cookies_from_browser (e.g. firefox) or --cookies-from-browser."
         )
-    if "requested format is not available" in lowered or "no video formats" in lowered:
-        return MediaError(
-            "YouTube did not offer a downloadable format for this client. "
-            "Install deno or nodejs, or pass --cookies-from-browser firefox, then retry."
-        )
     if "video unavailable" in lowered or "this video is unavailable" in lowered:
         return MediaError(
             "Video unavailable (removed, region-locked, or not a public YouTube video)."
         )
-    if is_drm_report(exc) and exhausted:
+    if exhausted:
         return MediaError(
-            "Every YouTube player client only offered protected streams for this "
-            "video (common on paid/rented titles). WatchListen will not bypass DRM. "
-            "If this is a normal public upload, install deno or nodejs so yt-dlp can "
-            "unlock regular formats, or pass --cookies-from-browser firefox. "
-            "Captions were also unavailable, so notes cannot be generated."
+            "YouTube hid every downloadable stream (missing EJS solver, old Node, "
+            "or a client that only lists SABR). Install: pip install -U 'yt-dlp[default]' "
+            "and deno (https://deno.land). Or sign into YouTube and rerun with "
+            "--cookies-from-browser firefox. Captions were also unavailable."
         )
-    if is_rate_limited(exc) or (exhausted and is_recoverable(exc)):
+    if "requested format is not available" in lowered or "no video formats" in lowered:
         return MediaError(
-            "YouTube blocked every download strategy (403/429/protected formats). "
-            "Install deno or nodejs, wait a few minutes, or sign into YouTube and "
-            "rerun with `--cookies-from-browser firefox`."
+            "This player client had no matching stream. Trying another strategy."
         )
     if isinstance(exc, URLValidationError):
         return MediaError(str(exc))

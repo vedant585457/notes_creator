@@ -61,6 +61,7 @@ git clone https://github.com/vedant585457/notes_creator.git
 cd notes_creator
 python3.11 -m venv .venv
 source .venv/bin/activate
+pip install -U "yt-dlp[default]"   # includes the YouTube EJS solver
 pip install -e ".[all,dev]"
 ```
 

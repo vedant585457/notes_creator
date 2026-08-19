@@ -16,6 +16,8 @@ This module is pure (no yt-dlp import) so the plan can be unit-tested offline.
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,16 +32,11 @@ DEFAULT_PLAYER_CLIENTS = (
     "android_vr",
 )
 
-FORMAT_VIDEO_720 = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
-FORMAT_VIDEO_480 = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
-FORMAT_PROGRESSIVE = "best[ext=mp4][height<=720]/best[height<=720]/best[ext=mp4]/best"
-FORMAT_HLS = (
-    "bestvideo[protocol^=m3u8]+bestaudio[protocol^=m3u8]/"
-    "best[protocol^=m3u8]/"
-    "bestvideo[protocol=m3u8_native]+bestaudio/"
-    "best"
-)
-FORMAT_AUDIO = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best"
+# Empty string = do not set `format`; let yt-dlp pick whatever exists.
+FORMAT_ANY = ""
+FORMAT_MERGED = "bv*+ba/b"
+FORMAT_AUDIO = "ba/b"
+FORMAT_VIDEO_720 = FORMAT_MERGED  # kept for older tests / callers
 
 RATE_LIMIT_MARKERS = (
     "http error 429",
@@ -166,27 +163,43 @@ def parse_cookies_from_browser(value: str) -> tuple[str, ...] | None:
 
 
 def detect_js_runtime() -> dict[str, dict]:
-    """Return yt-dlp `js_runtimes` for whatever interpreter is on PATH.
-
-    YouTube now requires an external JS runtime (EJS) to unlock non-SABR
-    formats. Without one, clients like `tv` often report 'DRM protected'
-    even though the video is a normal public upload.
-    """
+    """Return yt-dlp `js_runtimes` for whatever interpreter is on PATH."""
     import shutil
+    import subprocess
 
     found: dict[str, dict] = {}
-    mapping = (
-        ("deno", ("deno",)),
-        ("node", ("node", "nodejs")),
-        ("quickjs", ("qjs", "quickjs", "qjs-ng")),
-    )
-    for name, binaries in mapping:
-        for binary in binaries:
-            path = shutil.which(binary)
-            if path:
-                found[name] = {"path": path}
-                break
+    deno = shutil.which("deno")
+    if deno:
+        found["deno"] = {"path": deno}
+    node = shutil.which("node") or shutil.which("nodejs")
+    if node and _node_major(node) >= 20:
+        found["node"] = {"path": node}
+    for binary in ("qjs", "quickjs", "qjs-ng"):
+        path = shutil.which(binary)
+        if path:
+            found["quickjs"] = {"path": path}
+            break
     return found
+
+
+def _node_major(path: str) -> int:
+    try:
+        proc = subprocess.run(
+            [path, "-v"], capture_output=True, text=True, timeout=5, check=False
+        )
+        raw = (proc.stdout or proc.stderr or "").strip().lstrip("vV")
+        return int(raw.split(".", 1)[0])
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return 0
+
+
+def ejs_installed() -> bool:
+    try:
+        import yt_dlp_ejs  # noqa: F401
+
+        return True
+    except Exception:
+        return False
 
 
 def detect_browsers() -> list[str]:
@@ -276,47 +289,19 @@ def build_attempt_plan(
             )
         )
 
-    # 1. Quiet guest session on the friendliest client, 720p.
-    add(primary, FORMAT_VIDEO_720, f"{primary} · 720p", want_video=True, use_cookies=False, backoff=5)
-    # 2. HLS/m3u8 — often still served when DASH URLs 403.
-    add(primary, FORMAT_HLS, f"{primary} · hls", want_video=True, use_cookies=False, backoff=6)
-    # 3. Progressive single file (fewer fragment 403s).
-    add(
-        primary,
-        FORMAT_PROGRESSIVE,
-        f"{primary} · progressive",
-        want_video=True,
-        use_cookies=False,
-        backoff=8,
-    )
-    # 3. If the user configured cookies, use them *now* — still on the primary client.
+    # 1. Let yt-dlp pick clients AND format. This is the only strategy that
+    #    stays correct as YouTube changes — we just supply EJS + a JS runtime.
+    add("", FORMAT_ANY, "yt-dlp default", want_video=True, use_cookies=False, backoff=4)
+    add("", FORMAT_MERGED, "yt-dlp default · any stream", want_video=True, use_cookies=False, backoff=4)
     if cookies_configured:
-        add(
-            primary,
-            FORMAT_VIDEO_720,
-            f"{primary} · 720p + cookies",
-            want_video=True,
-            use_cookies=True,
-            backoff=10,
-        )
-    # 4. Other clients at 720p / 480p.
-    for idx, client in enumerate(rest):
-        fmt = FORMAT_VIDEO_720 if idx == 0 else FORMAT_VIDEO_480
-        kind = "720p" if idx == 0 else "480p"
-        add(client, fmt, f"{client} · {kind}", want_video=True, use_cookies=False, backoff=16 + idx * 6)
-    # 5. Audio-only: enough to listen. Watch can be skipped.
-    add(primary, FORMAT_AUDIO, f"{primary} · audio only", want_video=False, use_cookies=False, backoff=20)
-    if rest:
-        add(rest[0], FORMAT_AUDIO, f"{rest[0]} · audio only", want_video=False, use_cookies=False, backoff=8)
+        add("", FORMAT_ANY, "yt-dlp default + cookies", want_video=True, use_cookies=True, backoff=4)
+    # 2. Named clients only if the default mix failed.
+    for client in (primary, *rest[:3]):
+        add(client, FORMAT_ANY, f"{client} · any", want_video=True, use_cookies=False, backoff=3)
+    # 3. Audio-only is enough to listen.
+    add("", FORMAT_AUDIO, "audio only", want_video=False, use_cookies=False, backoff=3)
     if cookies_configured:
-        add(
-            primary,
-            FORMAT_AUDIO,
-            f"{primary} · audio + cookies",
-            want_video=False,
-            use_cookies=True,
-            backoff=0,
-        )
+        add("", FORMAT_AUDIO, "audio + cookies", want_video=False, use_cookies=True, backoff=0)
     return plan
 
 
