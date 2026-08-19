@@ -19,13 +19,26 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-# Clients that currently work *without* a PO token for most public videos.
-# Order is "fewest extra requests / most reliable" first.
-DEFAULT_PLAYER_CLIENTS = ("android_vr", "tv", "ios", "web_safari", "mweb")
+# Aug 2026: android_vr streams often 403; tv frequently reports false DRM (SABR).
+# Prefer web/ios clients that still return regular HTTPS/HLS formats.
+DEFAULT_PLAYER_CLIENTS = (
+    "web_safari",
+    "web_embedded",
+    "ios",
+    "mweb",
+    "tv",
+    "android_vr",
+)
 
 FORMAT_VIDEO_720 = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
 FORMAT_VIDEO_480 = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
 FORMAT_PROGRESSIVE = "best[ext=mp4][height<=720]/best[height<=720]/best[ext=mp4]/best"
+FORMAT_HLS = (
+    "bestvideo[protocol^=m3u8]+bestaudio[protocol^=m3u8]/"
+    "best[protocol^=m3u8]/"
+    "bestvideo[protocol=m3u8_native]+bestaudio/"
+    "best"
+)
 FORMAT_AUDIO = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best"
 
 RATE_LIMIT_MARKERS = (
@@ -61,6 +74,12 @@ RECOVERABLE_MARKERS = RATE_LIMIT_MARKERS + (
     "ssl: unexpected_eof",
     "fragment not found",
     "requested format is not available",
+    # One client listing only SABR/Widevine formats. Other clients often still
+    # have a normal stream — this is NOT a request to break real DRM.
+    "this video is drm protected",
+    "drm protected",
+    "only images are available",
+    "sabr streaming",
 )
 
 
@@ -89,6 +108,11 @@ def is_rate_limited(exc: BaseException | str) -> bool:
 def is_recoverable(exc: BaseException | str) -> bool:
     text = _norm(exc)
     return any(marker in text for marker in RECOVERABLE_MARKERS)
+
+
+def is_drm_report(exc: BaseException | str) -> bool:
+    """True when yt-dlp labelled formats as DRM — often only one client."""
+    return "drm" in _norm(exc)
 
 
 def backoff_seconds(attempt_index: int, *, base: float = 8.0, cap: float = 60.0) -> float:
@@ -139,6 +163,30 @@ def parse_cookies_from_browser(value: str) -> tuple[str, ...] | None:
             return (browser,)
         return None
     return (raw,)
+
+
+def detect_js_runtime() -> dict[str, dict]:
+    """Return yt-dlp `js_runtimes` for whatever interpreter is on PATH.
+
+    YouTube now requires an external JS runtime (EJS) to unlock non-SABR
+    formats. Without one, clients like `tv` often report 'DRM protected'
+    even though the video is a normal public upload.
+    """
+    import shutil
+
+    found: dict[str, dict] = {}
+    mapping = (
+        ("deno", ("deno",)),
+        ("node", ("node", "nodejs")),
+        ("quickjs", ("qjs", "quickjs", "qjs-ng")),
+    )
+    for name, binaries in mapping:
+        for binary in binaries:
+            path = shutil.which(binary)
+            if path:
+                found[name] = {"path": path}
+                break
+    return found
 
 
 def detect_browsers() -> list[str]:
@@ -228,16 +276,18 @@ def build_attempt_plan(
             )
         )
 
-    # 1. Quiet guest session on the friendliest client, 720p, no extra caption traffic.
-    add(primary, FORMAT_VIDEO_720, f"{primary} · 720p", want_video=True, use_cookies=False, backoff=8)
-    # 2. Same client, progressive (one file, fewer fragment 403s).
+    # 1. Quiet guest session on the friendliest client, 720p.
+    add(primary, FORMAT_VIDEO_720, f"{primary} · 720p", want_video=True, use_cookies=False, backoff=5)
+    # 2. HLS/m3u8 — often still served when DASH URLs 403.
+    add(primary, FORMAT_HLS, f"{primary} · hls", want_video=True, use_cookies=False, backoff=6)
+    # 3. Progressive single file (fewer fragment 403s).
     add(
         primary,
         FORMAT_PROGRESSIVE,
         f"{primary} · progressive",
         want_video=True,
         use_cookies=False,
-        backoff=12,
+        backoff=8,
     )
     # 3. If the user configured cookies, use them *now* — still on the primary client.
     if cookies_configured:

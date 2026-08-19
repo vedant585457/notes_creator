@@ -189,12 +189,13 @@ tests/                          no network, no Ollama required
 
 YouTube throttles anonymous download IPs. WatchListen does **not** die on the first 429. It follows current [yt-dlp guidance](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube):
 
-1. Talk to **one** player client at a time, starting with `android_vr` (no PO token).
-2. Sleep `1.5s` between Innertube requests; cap fragment concurrency at 1; force IPv4.
-3. On 429 / 403 / "try again later": wait 8–60s, then switch strategy (`tv` → `ios` → progressive → audio-only).
+1. Talk to **one** player client at a time, starting with `web_safari` / `web_embedded` (android_vr currently 403s; `tv` often false-labels SABR as DRM).
+2. Sleep `1.5s` between Innertube requests; cap fragment concurrency at 1; force IPv4; use deno/node if installed so yt-dlp can unlock regular formats.
+3. On 429 / 403 / false "DRM protected": wait, then switch strategy (HLS → progressive → ios → audio-only). A DRM *label from one client* is not treated as fatal.
 4. Resume partial files and **reuse the media cache** so a retry does not re-hit YouTube.
 5. If the video is still blocked but captions exist, notes continue from captions (watch is skipped).
 6. Optional last resort: `--cookies-from-browser firefox` after you sign into YouTube in that browser. Use a throwaway account if you download a lot — cookies can get a Google account flagged.
+7. Real paid/rented DRM titles are not decrypted. WatchListen will not bypass DRM.
 
 ```bash
 watchlisten URL --cookies-from-browser firefox

@@ -106,7 +106,14 @@ class DownloadConfig:
     sleep_requests: float = 1.5
     retries: int = 12
     player_clients: list[str] = field(
-        default_factory=lambda: ["android_vr", "tv", "ios", "web_safari"]
+        default_factory=lambda: [
+            "web_safari",
+            "web_embedded",
+            "ios",
+            "mweb",
+            "tv",
+            "android_vr",
+        ]
     )
     limit_rate: str = "2.5M"
     concurrent_fragments: int = 1
@@ -221,6 +228,7 @@ def _apply_env(cfg: Config) -> Config:
     """Lightweight overrides so operators can tweak without a file."""
     models = cfg.models
     export = cfg.export
+    download = cfg.download
     extra: dict[str, Any] = {}
     if value := os.environ.get("WATCHLISTEN_VISION_MODEL"):
         models = replace(models, vision=value)
@@ -232,4 +240,10 @@ def _apply_env(cfg: Config) -> Config:
         export = replace(export, output_dir=value)
     if value := os.environ.get("WATCHLISTEN_OLLAMA_HOST") or os.environ.get("OLLAMA_HOST"):
         extra["ollama_host"] = value
-    return replace(cfg, models=models, export=export, **extra)
+    if value := os.environ.get("WATCHLISTEN_COOKIES_FROM_BROWSER"):
+        download = replace(download, cookies_from_browser=value)
+    if value := os.environ.get("WATCHLISTEN_COOKIEFILE"):
+        download = replace(download, cookiefile=value)
+    if value := os.environ.get("WATCHLISTEN_PROXY"):
+        download = replace(download, proxy=value)
+    return replace(cfg, models=models, export=export, download=download, **extra)

@@ -11,6 +11,7 @@ from watchlisten.core.yt_resilience import (
     FORMAT_VIDEO_720,
     backoff_seconds,
     build_attempt_plan,
+    is_drm_report,
     is_rate_limited,
     is_recoverable,
     parse_cookies_from_browser,
@@ -43,6 +44,13 @@ def test_403_is_recoverable_but_not_rate_limit():
     assert is_rate_limited("HTTP Error 403: Forbidden") is False
 
 
+def test_drm_label_is_recoverable_so_other_clients_are_tried():
+    msg = "ERROR: [youtube] 1RFx_5p3DYY: This video is DRM protected"
+    assert is_drm_report(msg)
+    assert is_recoverable(msg)
+    assert is_rate_limited(msg) is False
+
+
 def test_backoff_grows_and_caps():
     assert backoff_seconds(0, base=8, cap=60) == 8
     assert backoff_seconds(1, base=8, cap=60) == pytest.approx(12.8)
@@ -65,20 +73,22 @@ def test_parse_cookies_from_browser():
 
 def test_attempt_plan_uses_one_client_at_a_time():
     plan = build_attempt_plan(cookies_configured=False)
-    assert plan[0].client == "android_vr"
+    assert plan[0].client == "web_safari"
     assert plan[0].format_spec == FORMAT_VIDEO_720
     assert plan[0].use_cookies is False
-    clients_in_first_two = {plan[0].client, plan[1].client}
-    assert clients_in_first_two == {"android_vr"}
+    assert {plan[0].client, plan[1].client} == {"web_safari"}
     assert any(a.format_spec == FORMAT_AUDIO for a in plan)
+    assert any("hls" in a.label for a in plan)
     assert all(not a.use_cookies for a in plan)
+    # Broken/legacy clients come later, not first
+    assert plan[0].client not in {"android_vr", "tv"}
 
 
 def test_attempt_plan_inserts_cookie_retry_when_configured():
     plan = build_attempt_plan(cookies_configured=True)
     cookie_attempts = [a for a in plan if a.use_cookies]
     assert cookie_attempts
-    assert cookie_attempts[0].client == "android_vr"
+    assert cookie_attempts[0].client == "web_safari"
 
 
 class _ScriptedYDL:
@@ -149,9 +159,22 @@ def test_download_retries_after_429_then_succeeds(tmp_path: Path):
     assert bundle.video_path is not None
     assert bundle.video_path.exists()
     assert sleeps  # waited before the second strategy
-    assert fake.opts_log[0]["extractor_args"]["youtube"]["player_client"] == ["android_vr"]
+    assert fake.opts_log[0]["extractor_args"]["youtube"]["player_client"] == ["web_safari"]
     assert fake.opts_log[0]["source_address"] == "0.0.0.0"
     assert fake.opts_log[0]["concurrent_fragment_downloads"] == 1
+
+
+def test_download_retries_after_false_drm_then_succeeds(tmp_path: Path):
+    dl, _sleeps, fake = _downloader(
+        tmp_path,
+        [
+            Exception("ERROR: [youtube] 1RFx_5p3DYY: This video is DRM protected"),
+            "ok",
+        ],
+    )
+    bundle = dl.download("https://youtu.be/dQw4w9WgXcQ", tmp_path / "work")
+    assert bundle.video_path is not None
+    assert len(fake.opts_log) >= 2
 
 
 def test_download_does_not_retry_private_video(tmp_path: Path):

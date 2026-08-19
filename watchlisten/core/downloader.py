@@ -15,6 +15,8 @@ from watchlisten.core.yt_resilience import (
     build_attempt_plan,
     build_metadata_plan,
     detect_browsers,
+    detect_js_runtime,
+    is_drm_report,
     is_rate_limited,
     is_recoverable,
     parse_cookies_from_browser,
@@ -99,11 +101,21 @@ class Downloader:
         if reused is not None:
             return reused
 
+        runtimes = detect_js_runtime()
+        if runtimes:
+            self.on_log("JS runtime for YouTube formats: " + ", ".join(runtimes))
+        else:
+            self.on_log(
+                "No JS runtime (deno/node) on PATH — some YouTube clients will "
+                "only offer SABR/DRM-looking formats. Install deno or nodejs."
+            )
+
         plan = build_attempt_plan(
             cookies_configured=self._cookies_ready(),
             clients=list(self.config.download.player_clients),
         )
         last_error: Exception | None = None
+        drm_hits = 0
         for index, attempt in enumerate(plan):
             self._check_cancel()
             self.on_log(f"Download strategy {index + 1}/{len(plan)}: {attempt.label}")
@@ -115,7 +127,13 @@ class Downloader:
                 last_error = exc
                 if not is_recoverable(exc):
                     raise _translate_ytdlp_error(exc, url) from exc
-                wait = attempt.backoff
+                if is_drm_report(exc):
+                    drm_hits += 1
+                    self.on_log(
+                        f"{attempt.label} only listed protected formats — "
+                        "trying another player client (not cracking DRM)."
+                    )
+                wait = 2.0 if is_drm_report(exc) else attempt.backoff
                 if index < len(plan) - 1 and wait > 0:
                     self.on_log(self._retry_message(exc, attempt, wait, index, len(plan)))
                     self._interruptible_sleep(wait)
@@ -131,7 +149,12 @@ class Downloader:
                 return bundle
             self.on_log(f"{attempt.label} finished but produced no media; trying next strategy.")
 
-        # Last resort: notes from captions still beat a hard 429.
+        # Last resort: notes from captions still beat a hard 403/DRM-label.
+        if drm_hits:
+            self.on_log(
+                f"{drm_hits} client(s) reported protected formats — "
+                "trying captions so notes can still be written."
+            )
         caption_only = self._try_captions(url, workdir, video_id)
         if caption_only is not None:
             self.on_log(
@@ -197,6 +220,9 @@ class Downloader:
             "extractor_args": {"youtube": {"player_client": [attempt.client]}},
             "progress_hooks": [self._ydl_hook],
         }
+        runtimes = detect_js_runtime()
+        if runtimes:
+            opts["js_runtimes"] = runtimes
         if attempt.format_spec:
             opts["format"] = attempt.format_spec
         if not skip_download:
@@ -337,7 +363,7 @@ class Downloader:
                 DownloadAttempt(
                     client=self.config.download.player_clients[0]
                     if self.config.download.player_clients
-                    else "android_vr",
+                    else "web_safari",
                     format_spec="",
                     label="captions",
                     want_video=False,
@@ -376,7 +402,12 @@ class Downloader:
         index: int,
         total: int,
     ) -> str:
-        kind = "rate-limited" if is_rate_limited(exc) else "blocked"
+        if is_drm_report(exc):
+            kind = "reported protected formats"
+        elif is_rate_limited(exc):
+            kind = "rate-limited"
+        else:
+            kind = "blocked"
         return (
             f"YouTube {kind} on {attempt.label} ({_short_error(exc)}). "
             f"Waiting {wait:.0f}s, then trying the next strategy "
@@ -683,14 +714,20 @@ def _translate_ytdlp_error(exc: Exception, url: str, *, exhausted: bool = False)
         return MediaError(
             "Video unavailable (removed, region-locked, or not a public YouTube video)."
         )
-    if is_rate_limited(exc) or exhausted and is_recoverable(exc):
-        hint = (
-            "YouTube rate-limited this IP after several fallbacks "
-            "(android_vr → tv → ios, then audio, then captions). "
-            "Wait a few minutes, or sign into YouTube in Firefox/Chrome and rerun with "
-            "`--cookies-from-browser firefox` so the request looks like a normal session."
+    if is_drm_report(exc) and exhausted:
+        return MediaError(
+            "Every YouTube player client only offered protected streams for this "
+            "video (common on paid/rented titles). WatchListen will not bypass DRM. "
+            "If this is a normal public upload, install deno or nodejs so yt-dlp can "
+            "unlock regular formats, or pass --cookies-from-browser firefox. "
+            "Captions were also unavailable, so notes cannot be generated."
         )
-        return MediaError(hint)
+    if is_rate_limited(exc) or (exhausted and is_recoverable(exc)):
+        return MediaError(
+            "YouTube blocked every download strategy (403/429/protected formats). "
+            "Install deno or nodejs, wait a few minutes, or sign into YouTube and "
+            "rerun with `--cookies-from-browser firefox`."
+        )
     if isinstance(exc, URLValidationError):
         return MediaError(str(exc))
     return MediaError(f"Download failed for {url}: {message}")
