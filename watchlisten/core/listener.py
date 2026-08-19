@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from watchlisten.config import Config
 from watchlisten.core.downloader import parse_caption_file
 from watchlisten.models import MediaBundle, TranscriptSegment
-from watchlisten.utils import WatchListenError
+from watchlisten.utils import WatchListenError, run_cmd
 
 LogHook = Callable[[str], None]
 ProgressHook = Callable[[str, int, int, str], None]
@@ -42,15 +44,18 @@ class Listener:
             if captions_only:
                 raise WatchListenError("Captions-only was requested but no usable caption file was found.")
 
+        whisper_error: str | None = None
         if not captions_only:
             try:
                 segs = self.from_whisper(media.audio_path, duration=duration)
                 if segs:
                     return segs
             except WhisperUnavailable as exc:
-                self.on_log(str(exc))
+                whisper_error = str(exc)
+                self.on_log(whisper_error)
             except Exception as exc:
-                self.on_log(f"Whisper failed ({exc}); trying captions fallback.")
+                whisper_error = f"{type(exc).__name__}: {exc}"
+                self.on_log(f"Whisper failed ({whisper_error}); trying captions fallback.")
 
         if media.caption_path and media.caption_path.exists():
             segs = self.from_captions(media.caption_path)
@@ -58,6 +63,13 @@ class Listener:
                 self.on_log(f"Fell back to YouTube captions ({len(segs)} cues).")
                 return segs
 
+        if whisper_error and "not installed" not in whisper_error.lower():
+            raise WatchListenError(
+                f"Whisper is installed but crashed ({whisper_error}). "
+                "Captions were not available for this video. "
+                "Retry from the CLI (`watchlisten URL --cli`) if the TUI blocked "
+                "process spawning, or pass --captions-only when the video has subs."
+            )
         raise WatchListenError(
             "Could not transcribe audio. Install faster-whisper "
             "(`pip install faster-whisper`) or use a video that has captions."
@@ -80,7 +92,7 @@ class Listener:
         if audio_path is None or not audio_path.exists():
             raise WhisperUnavailable("No extracted audio file is available for Whisper.")
         try:
-            from faster_whisper import WhisperModel
+            import faster_whisper  # noqa: F401
         except ImportError as exc:
             raise WhisperUnavailable(
                 "faster-whisper is not installed. `pip install faster-whisper` "
@@ -89,31 +101,53 @@ class Listener:
 
         device, compute = _resolve_device(self.config.whisper.device, self.config.whisper.compute_type)
         model_size = self.config.models.whisper
-        self.on_log(f"Loading Whisper model '{model_size}' ({device}/{compute})")
-        self.on_progress("listen", 0, 1, f"loading {model_size}")
-        model = WhisperModel(model_size, device=device, compute_type=compute)
-
         language = None if self.config.whisper.language in {"", "auto"} else self.config.whisper.language
-        self.on_log("Transcribing audio (this is the 'listen' pass)…")
-        segments_iter, info = model.transcribe(
-            str(audio_path),
-            language=language,
-            vad_filter=self.config.whisper.vad_filter,
-            beam_size=5,
+        self.on_log(
+            f"Transcribing in a separate process "
+            f"(model={model_size}, {device}/{compute}) so the TUI cannot break Whisper."
         )
-        detected = getattr(info, "language", None)
+        self.on_progress("listen", 0, 1, f"whisper {model_size}")
+
+        workdir = audio_path.parent
+        job_path = workdir / "whisper_job.json"
+        out_path = workdir / "whisper_out.json"
+        job = {
+            "audio_path": str(audio_path),
+            "model_size": model_size,
+            "device": device,
+            "compute_type": compute,
+            "language": language or "auto",
+            "vad_filter": self.config.whisper.vad_filter,
+        }
+        job_path.write_text(json.dumps(job), encoding="utf-8")
+
+        # Long talks (1h+) can take a while on CPU int8.
+        timeout = 4 * 60 * 60
+        result = run_cmd(
+            [sys.executable, "-m", "watchlisten.core.whisper_worker", str(job_path), str(out_path)],
+            timeout=timeout,
+        )
+        if result.returncode != 0 and not out_path.exists():
+            tail = (result.stderr or result.stdout or "").strip() or f"exit {result.returncode}"
+            raise RuntimeError(tail.splitlines()[-1][:300])
+
+        payload = json.loads(out_path.read_text(encoding="utf-8"))
+        if not payload.get("ok"):
+            raise RuntimeError(payload.get("error") or "whisper worker failed")
+
+        detected = payload.get("language")
         if detected:
             self.on_log(f"Detected spoken language: {detected}")
 
         out: list[TranscriptSegment] = []
-        total = duration or getattr(info, "duration", None) or 0.0
-        for seg in segments_iter:
-            text = (seg.text or "").strip()
+        total = duration or payload.get("duration") or 0.0
+        for raw in payload.get("segments") or []:
+            text = str(raw.get("text") or "").strip()
             if not text:
                 continue
             item = TranscriptSegment(
-                start=float(seg.start or 0.0),
-                end=float(seg.end or seg.start or 0.0),
+                start=float(raw.get("start") or 0.0),
+                end=float(raw.get("end") or 0.0),
                 text=text,
                 source="whisper",
             )
