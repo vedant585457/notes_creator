@@ -196,6 +196,34 @@ def test_download_reuses_cached_file(tmp_path: Path):
     assert fake.opts_log == []
 
 
+def test_metadata_ignores_missing_formats_and_does_not_say_unavailable(tmp_path: Path):
+    from watchlisten.core.downloader import _translate_ytdlp_error
+
+    err = _translate_ytdlp_error(
+        Exception("ERROR: [youtube] 1RFx_5p3DYY: Requested format is not available"),
+        "https://www.youtube.com/watch?v=1RFx_5p3DYY",
+    )
+    assert "unavailable" not in str(err).lower()
+    assert "format" in str(err).lower()
+
+    dl, _sleeps, fake = _downloader(
+        tmp_path,
+        [
+            Exception("ERROR: [youtube] 1RFx_5p3DYY: Requested format is not available"),
+            {
+                "id": "1RFx_5p3DYY",
+                "title": "Black Hat Asia 2026",
+                "duration": 1754,
+                "channel": "Black Hat",
+            },
+        ],
+    )
+    meta = dl.fetch_metadata("https://www.youtube.com/watch?v=1RFx_5p3DYY")
+    assert meta.title == "Black Hat Asia 2026"
+    assert fake.opts_log[0].get("ignore_no_formats_error") is True
+    assert "format" not in fake.opts_log[0]
+
+
 def test_metadata_retries_then_returns(tmp_path: Path):
     dl, sleeps, _fake = _downloader(
         tmp_path,

@@ -217,13 +217,19 @@ class Downloader:
             "concurrent_fragment_downloads": max(1, int(cfg.concurrent_fragments)),
             "socket_timeout": 30,
             "cachedir": str(self.config.cache_path / "yt-dlp"),
-            "extractor_args": {"youtube": {"player_client": [attempt.client]}},
             "progress_hooks": [self._ydl_hook],
         }
+        if attempt.client:
+            opts["extractor_args"] = {"youtube": {"player_client": [attempt.client]}}
+        if skip_download:
+            # Title/duration/chapters must succeed even when SABR hides formats.
+            opts["ignore_no_formats_error"] = True
+            opts.pop("sleep_interval", None)
+            opts.pop("max_sleep_interval", None)
         runtimes = detect_js_runtime()
         if runtimes:
             opts["js_runtimes"] = runtimes
-        if attempt.format_spec:
+        if attempt.format_spec and not skip_download:
             opts["format"] = attempt.format_spec
         if not skip_download:
             opts["merge_output_format"] = "mp4"
@@ -708,9 +714,12 @@ def _translate_ytdlp_error(exc: Exception, url: str, *, exhausted: bool = False)
             "This video is age-restricted. Sign into YouTube in a browser and set "
             "download.cookies_from_browser (e.g. firefox) or --cookies-from-browser."
         )
-    if "video unavailable" in lowered or (
-        "not available" in lowered and "try again later" not in lowered
-    ):
+    if "requested format is not available" in lowered or "no video formats" in lowered:
+        return MediaError(
+            "YouTube did not offer a downloadable format for this client. "
+            "Install deno or nodejs, or pass --cookies-from-browser firefox, then retry."
+        )
+    if "video unavailable" in lowered or "this video is unavailable" in lowered:
         return MediaError(
             "Video unavailable (removed, region-locked, or not a public YouTube video)."
         )

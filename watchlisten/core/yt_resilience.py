@@ -325,12 +325,25 @@ def build_metadata_plan(
     cookies_configured: bool,
     clients: list[str] | None = None,
 ) -> list[DownloadAttempt]:
-    """Lighter ladder for `extract_info(download=False)`."""
+    """Lighter ladder for `extract_info(download=False)`.
+
+    First shot lets yt-dlp pick its own client mix. We never need a
+    downloadable format here — only title, duration, chapters, captions.
+    """
     names = [c.strip() for c in (clients or list(DEFAULT_PLAYER_CLIENTS)) if c and c.strip()]
     if not names:
         names = list(DEFAULT_PLAYER_CLIENTS)
-    plan: list[DownloadAttempt] = []
-    for idx, client in enumerate(names[:4]):
+    plan: list[DownloadAttempt] = [
+        DownloadAttempt(
+            client="",
+            format_spec="",
+            label="meta/default",
+            want_video=False,
+            use_cookies=False,
+            backoff=1,
+        )
+    ]
+    for client in names:
         plan.append(
             DownloadAttempt(
                 client=client,
@@ -338,7 +351,7 @@ def build_metadata_plan(
                 label=f"meta/{client}",
                 want_video=False,
                 use_cookies=False,
-                backoff=backoff_seconds(idx, base=5.0, cap=30.0),
+                backoff=1,
             )
         )
     if cookies_configured:
@@ -349,7 +362,7 @@ def build_metadata_plan(
                 label=f"meta/{names[0]}+cookies",
                 want_video=False,
                 use_cookies=True,
-                backoff=8,
+                backoff=1,
             )
         )
     return plan
