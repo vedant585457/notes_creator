@@ -1,0 +1,5 @@
+node_modules/
+out/
+assets/video/source_1080p_h264.mp4
+*.log
+public/
